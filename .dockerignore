@@ -7,3 +7,5 @@ npm-debug.log
 .gitignore
 .github
 env.list
+start.bat
+start.sh
