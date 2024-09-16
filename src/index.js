@@ -1,7 +1,9 @@
-require("dotenv").config();
-const fs = require("fs");
-const csv = require("csv-parser");
-const { Client, IntentsBitField, EmbedBuilder } = require("discord.js");
+import dotenv from "dotenv";
+import fs from "fs";
+import csv from "csv-parser";
+import { Client, IntentsBitField, EmbedBuilder } from "discord.js";
+
+dotenv.config();
 
 // !Initialize Variables
 const client = new Client({
@@ -13,7 +15,7 @@ const client = new Client({
     ],
 });
 
-let bonkLoginToken = "";
+let bonkLoginToken = ""; // Maybe Encapsulate this in a class later
 
 // !My functions
 // Retrieves Room Data
@@ -46,8 +48,8 @@ const bonkGetRoomsJSON = async () => {
         const responseJSON = await response.json();
         return responseJSON;
     } catch (err) {
-        console.log("bonkGetRoomsJSON() failed");
-        console.error(err);
+        console.error("bonkGetRoomsJSON() failed:", err);
+        throw err;
     }
 };
 
@@ -82,13 +84,17 @@ const getNewBLT = async () => {
         const responseJSON = await response.json();
         return responseJSON.token;
     } catch (err) {
-        console.log("getNewBLT() failed");
-        console.error(err);
+        console.error("getNewBLT() failed", err);
+        throw err;
     }
 };
 
 // Print those infos in the channel
-printBonkPkrRooms = (roomsJSON) => {
+const printBonkPkrRooms = (roomsJSON) => {
+    if (!roomsJSON || !roomsJSON.rooms) {
+        throw new Error("Invalid rooms data");
+    }
+    
     let roomsArray = roomsJSON.rooms;
 
     let roomsEmbed = new EmbedBuilder()
@@ -100,20 +106,20 @@ printBonkPkrRooms = (roomsJSON) => {
     for (let room of roomsArray) {
         if (room.roomname.toLowerCase().includes("parkour")) {
             noRoom = false;
-
-            let mode = "Classic";
+            
+            const modeMapping = {
+                b: "Classic",
+                ar: "Arrows",
+                ard: "Death Arrows",
+                sp: "Grapple",
+                f: "Football",
+                bs: "Simple",
+                v: "VTOL",
+            };
+            
+            let mode = modeMapping[room.mode_mo] || "Classic";
+            
             let password = "No";
-
-            if (room.mode_mo === "ar") {
-                mode = "Arrows";
-            } else if (room.mode_mo === "ard") {
-                mode = "Death Arrows";
-            } else if (room.mode_mo === "sp") {
-                mode = "Grapple";
-            } else if (room.mode_mo === "f") {
-                mode = "Football";
-            }
-
             if (room.password === 1) {
                 password = "Yes";
             }
@@ -136,9 +142,12 @@ printBonkPkrRooms = (roomsJSON) => {
 };
 
 // send bonk info to discord
-sendBonkInfo = async () => {
-    let updateMsg = "Sending Bonk Info ";
+const sendBonkInfo = async () => {
+    // Schedule the next update at first
     setTimeout(sendBonkInfo, 10000); // too fast and the bot will get rate-limited by the bonk.io server
+    
+    let updateMsg = "Sending Rooms Info to Discord ";
+    
     const now = new Date();
     console.log(updateMsg.concat(now.getHours(), ":", now.getMinutes(), ":", now.getSeconds()));
 
@@ -152,32 +161,44 @@ sendBonkInfo = async () => {
         .setTimestamp(Date.now());
 
     try {
-        let roomsJSON = await bonkGetRoomsJSON();
+        let roomsJSON;
+        
+        try {
+            roomsJSON = await bonkGetRoomsJSON();
+        } catch (err) {
+            console.error("Failed to get rooms JSON:", err);
+            return;
+        }
+        
+        if (!roomsJSON) {
+            console.error("Rooms JSON is undefined or null.");
+            return;
+        }
+        
         if (roomsJSON.r === "fail" && roomsJSON.e === "token") {
             console.log("Token Expired, trying to get a new one...");
             bonkLoginToken = await getNewBLT();
-            console.log("Successfully got new login token");
-        } else {
-            roomsEmbed = printBonkPkrRooms(roomsJSON);
+            console.log("New token obtained, retrying room data fetch...");
+            roomsJSON = await bonkGetRoomsJSON();
         }
+        
+        roomsEmbed = printBonkPkrRooms(roomsJSON);
     } catch (err) {
-        console.log("failed getting bonk rooms");
-        console.error(err);
+        console.error("failed getting bonk rooms", err);
     }
 
     try {
-        const channel = client.channels.cache.get("1122510728331542579");
+        const channel = client.channels.cache.get("1122510728331542579"); // Maybe storing in a config file would be better
         const message = await channel.messages.fetch("1233387458142666853");
         // channel.send({ embeds: [roomsEmbed] }); // Use this to send a new message
         message.edit({ embeds: [roomsEmbed] });
     } catch (err) {
-        console.log("failed sending bonk info to discord");
-        console.error(err);
+        console.error("failed sending bonk info to discord", err);
     }
 };
 
 // Function to get random map based on optional filters
-async function getRandomMap(authorName, mode, bonkVersion, tags) {
+const getRandomMap = async (authorName, mode, bonkVersion, tags) => {
     return new Promise((resolve, reject) => {
         const results = [];
 
@@ -249,14 +270,14 @@ client.on("interactionCreate", async (interaction) => {
 
         try {
             const mapDetails = await getRandomMap(authorName, mode, bonkVersion, tags);
-            
+
             const embed = new EmbedBuilder()
-                .setColor(0x0099FF)
+                .setColor(0x0099ff)
                 .setTitle(mapDetails.name) // Set only the map name as the title
                 .addFields(
-                    { name: 'Author', value: mapDetails.author, inline: true },
-                    { name: 'Mode', value: mapDetails.mode, inline: true },
-                    { name: 'Bonk Version', value: mapDetails.version, inline: true }
+                    { name: "Author", value: mapDetails.author, inline: true },
+                    { name: "Mode", value: mapDetails.mode, inline: true },
+                    { name: "Bonk Version", value: mapDetails.version, inline: true }
                 );
 
             await interaction.reply({ embeds: [embed] });
@@ -267,4 +288,4 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
-void client.login(process.env.BOT_TOKEN); // Let the discord bot login
+client.login(process.env.BOT_TOKEN); // Let the discord bot login
