@@ -103,9 +103,12 @@ const printBonkPkrRooms = (roomsJSON) => {
         .setTimestamp();
 
     let noRoom = true;
+    let numRooms = 0; // Initialize the room counter
+    
     for (let room of roomsArray) {
         if (room.roomname.toLowerCase().includes("parkour")) {
             noRoom = false;
+            numRooms++; // Increment the room counter
             
             const modeMapping = {
                 b: "Classic",
@@ -119,10 +122,7 @@ const printBonkPkrRooms = (roomsJSON) => {
             
             let mode = modeMapping[room.mode_mo] || "Classic";
             
-            let password = "No";
-            if (room.password === 1) {
-                password = "Yes";
-            }
+            let password = room.password === 1 ? "Yes" : "No";
 
             roomsEmbed.addFields({
                 name: `Room Name: ${room.roomname}`,
@@ -138,7 +138,7 @@ const printBonkPkrRooms = (roomsJSON) => {
         });
     }
 
-    return roomsEmbed;
+    return { embed: roomsEmbed, numRooms }; // Return both the embed and number of rooms
 };
 
 // send bonk info to discord
@@ -151,24 +151,11 @@ const sendBonkInfo = async () => {
     const now = new Date();
     console.log(updateMsg.concat(now.getHours(), ":", now.getMinutes(), ":", now.getSeconds()));
 
-    let roomsEmbed = new EmbedBuilder()
-        .setColor(0x0099ff)
-        .setTitle("Live Bonk Parkour Rooms:")
-        .addFields({
-            name: "No Parkour rooms available at the moment",
-            value: "Please check back later :D",
-        })
-        .setTimestamp(Date.now());
+    let roomsEmbed;
+    let numRooms = 0; // Initialize the room count
 
     try {
-        let roomsJSON;
-        
-        try {
-            roomsJSON = await bonkGetRoomsJSON();
-        } catch (err) {
-            console.error("Failed to get rooms JSON:", err);
-            return;
-        }
+        let roomsJSON = await bonkGetRoomsJSON();
         
         if (!roomsJSON) {
             console.error("Rooms JSON is undefined or null.");
@@ -182,7 +169,10 @@ const sendBonkInfo = async () => {
             roomsJSON = await bonkGetRoomsJSON();
         }
         
-        roomsEmbed = printBonkPkrRooms(roomsJSON);
+        // Destructure the returned object to get the embed and number of rooms
+        const result = printBonkPkrRooms(roomsJSON);
+        roomsEmbed = result.embed;
+        numRooms = result.numRooms;
     } catch (err) {
         console.error("failed getting bonk rooms", err);
     }
@@ -192,6 +182,9 @@ const sendBonkInfo = async () => {
         const message = await channel.messages.fetch("1233387458142666853");
         // channel.send({ embeds: [roomsEmbed] }); // Use this to send a new message
         message.edit({ embeds: [roomsEmbed] });
+        
+        // Update the channel name with the number of rooms
+        await channel.edit({ name: `🚪┊(${numRooms}) ʀᴏᴏᴍs` });
     } catch (err) {
         console.error("failed sending bonk info to discord", err);
     }
