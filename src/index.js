@@ -184,7 +184,12 @@ const sendBonkInfo = async () => {
         message.edit({ embeds: [roomsEmbed] });
         
         // Update the channel name with the number of rooms
-        await channel.edit({ name: `🚪┊(${numRooms}) ʀᴏᴏᴍs` });
+        if (numRooms === 1) {
+            await channel.edit({ name: `🚪┊〔${numRooms}〕ʀᴏᴏᴍ` });
+        } else {
+            await channel.edit({ name: `🚪┊〔${numRooms}〕ʀᴏᴏᴍs` });
+        }
+        
     } catch (err) {
         console.error("failed sending bonk info to discord", err);
     }
