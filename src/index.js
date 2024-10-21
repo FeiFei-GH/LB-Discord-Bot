@@ -136,7 +136,7 @@ const printBonkPkrRooms = (roomsJSON) => {
         .setTimestamp();
 
     let numRooms = 0; // Initialize the room counter
-    const maxDistance = 3; // Set a threshold for Levenshtein distance
+    const maxDistance = 4; // Set a threshold for Levenshtein distance
     
     for (let room of roomsArray) {
         const roomName = room.roomname.toLowerCase();
