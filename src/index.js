@@ -230,7 +230,6 @@ const sendBonkInfo = async () => {
         } else {
             await channel.edit({ name: `🚪┊〔${numRooms}〕ʀᴏᴏᴍs` });
         }
-        
     } catch (err) {
         console.error("failed sending bonk info to discord", err);
     }
