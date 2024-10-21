@@ -89,6 +89,39 @@ const getNewBLT = async () => {
     }
 };
 
+const stringLevDistance = (a, b) => {
+    if (!a || !b) return (a || b).length;
+
+    const matrix = [];
+
+    // Increment along the first column of each row
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+
+    // Increment each column in the first row
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+
+    // Fill in the rest of the matrix
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1).toLowerCase() === a.charAt(j - 1).toLowerCase()) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // substitution
+                    matrix[i][j - 1] + 1,     // insertion
+                    matrix[i - 1][j] + 1      // deletion
+                );
+            }
+        }
+    }
+
+    return matrix[b.length][a.length];
+};
+
 // Print those infos in the channel
 const printBonkPkrRooms = (roomsJSON) => {
     if (!roomsJSON || !roomsJSON.rooms) {
@@ -102,12 +135,20 @@ const printBonkPkrRooms = (roomsJSON) => {
         .setTitle("Live Bonk Parkour Rooms:")
         .setTimestamp();
 
-    let noRoom = true;
     let numRooms = 0; // Initialize the room counter
+    const maxDistance = 3; // Set a threshold for Levenshtein distance
     
     for (let room of roomsArray) {
-        if (room.roomname.toLowerCase().includes("parkour")) {
-            noRoom = false;
+        const roomName = room.roomname.toLowerCase();
+        
+        const lengthDifference = Math.abs(roomName.length - 7);
+        if (lengthDifference > maxDistance && !roomName.includes("parkour")) {
+            continue; // Skip this room
+        }
+        
+        const distance = stringLevDistance(roomName, targetWord);
+        
+        if (distance <= maxDistance || roomName.includes("parkour")) {
             numRooms++; // Increment the room counter
             
             const modeMapping = {
@@ -131,7 +172,7 @@ const printBonkPkrRooms = (roomsJSON) => {
         }
     }
 
-    if (noRoom) {
+    if (numRooms == 0) {
         roomsEmbed.addFields({
             name: "No Parkour rooms available at the moment",
             value: "Please check back later :D",
