@@ -146,7 +146,7 @@ const printBonkPkrRooms = (roomsJSON) => {
             continue; // Skip this room
         }
         
-        const distance = stringLevDistance(roomName, targetWord);
+        const distance = stringLevDistance(roomName, "parkour");
         
         if (distance <= maxDistance || roomName.includes("parkour")) {
             numRooms++; // Increment the room counter
