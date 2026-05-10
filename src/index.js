@@ -44,40 +44,49 @@ const updateMapListCSV = async () => {
             "Team/Solo Map", "Moving/Stationary", "Proof of concept map?", "Tags"
         ];
 
-        Readable.from(csvText)
-            .pipe(csv())
-            .on("data", (data) => {
-                const row = {};
-                for (const header of headersToKeep) {
-                    row[header] = data[header] !== undefined ? data[header] : "";
-                }
-                results.push(row);
-            })
-            .on("end", () => {
-                // Safety Check 2: Don't overwrite if we somehow got zero valid rows
-                if (results.length === 0) {
-                    console.error("Parsed CSV resulted in 0 rows. Aborting.");
-                    return;
-                }
+        // NEW: Wrap the stream in a Promise so JavaScript actually waits for it to finish!
+        await new Promise((resolve, reject) => {
+            Readable.from(csvText)
+                .pipe(csv())
+                .on("data", (data) => {
+                    const row = {};
+                    for (const header of headersToKeep) {
+                        row[header] = data[header] !== undefined ? data[header] : "";
+                    }
+                    results.push(row);
+                })
+                .on("end", () => {
+                    // Safety Check 2: Don't overwrite if we somehow got zero valid rows
+                    if (results.length === 0) {
+                        console.error("Parsed CSV resulted in 0 rows. Aborting.");
+                        resolve(); // Resolve anyway so the bot doesn't freeze
+                        return;
+                    }
 
-                // Reconstruct the CSV format exactly
-                let newCsvContent = headersToKeep.join(",") + "\n";
-                results.forEach((row) => {
-                    const rowValues = headersToKeep.map((header) => {
-                        let val = row[header] || "";
-                        // If data contains commas or quotes (like Tags), wrap it in quotes
-                        if (val.includes(",") || val.includes('"')) {
-                            val = `"${val.replace(/"/g, '""')}"`;
-                        }
-                        return val;
+                    // Reconstruct the CSV format exactly
+                    let newCsvContent = headersToKeep.join(",") + "\n";
+                    results.forEach((row) => {
+                        const rowValues = headersToKeep.map((header) => {
+                            let val = row[header] || "";
+                            // If data contains commas or quotes (like Tags), wrap it in quotes
+                            if (val.includes(",") || val.includes('"')) {
+                                val = `"${val.replace(/"/g, '""')}"`;
+                            }
+                            return val;
+                        });
+                        newCsvContent += rowValues.join(",") + "\n";
                     });
-                    newCsvContent += rowValues.join(",") + "\n";
-                });
 
-                // Write the safe data to the file
-                fs.writeFileSync("src/mapList.csv", newCsvContent.trim(), "utf8");
-                console.log(`Successfully updated src/mapList.csv with ${results.length} maps!`);
-            });
+                    // Write the safe data to the file
+                    fs.writeFileSync("src/mapList.csv", newCsvContent.trim(), "utf8");
+                    console.log(`Successfully updated src/mapList.csv with ${results.length} maps!`);
+                    resolve(); // Tell the Promise we are officially done
+                })
+                .on("error", (err) => {
+                    reject(err); // Catch any stream errors
+                });
+        });
+
     } catch (error) {
         console.error("Error updating map list:", error.message);
         console.log("Fallback: Continuing to use the existing mapList.csv");
