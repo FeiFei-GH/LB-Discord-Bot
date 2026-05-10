@@ -339,7 +339,7 @@ const getRandomMap = async (authorName, mode, bonkVersion, tags) => {
 }
 
 // !Discord Bot Functions
-client.on("ready", (c) => {
+client.on("ready", async (c) => {
     console.log(`${c.user.username} is online.`);
 
     // 1. Run the update immediately when the bot boots
