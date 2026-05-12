@@ -136,19 +136,24 @@ const printBonkPkrRooms = (roomsJSON) => {
         .setTimestamp();
 
     let numRooms = 0; // Initialize the room counter
-    const maxDistance = 4; // Set a threshold for Levenshtein distance
     
     for (let room of roomsArray) {
         const roomName = room.roomname.toLowerCase();
         
-        const lengthDifference = Math.abs(roomName.length - 7);
-        if (lengthDifference > maxDistance && !roomName.includes("parkour")) {
-            continue; // Skip this room
+        // 1. Strip all spaces and special characters ("par kour!" becomes "parkour")
+        const cleanName = roomName.replace(/[^a-z0-9]/g, ""); 
+        
+        // 2. Check for common parkour abbreviations and intentional misspellings
+        const keywords = ["parkour", "parkor", "parkur", "parcour", "prkr", "parkr", "pkr", "prcr"];
+        let isParkour = keywords.some(keyword => cleanName.includes(keyword));
+        
+        // 3. Fallback: Strict Levenshtein distance for minor typos (e.g., "parkoir")
+        // Distance 2 is the maximum safe threshold for a 7-letter word to avoid false positives
+        if (!isParkour && stringLevDistance(cleanName, "parkour") <= 2) {
+            isParkour = true;
         }
         
-        const distance = stringLevDistance(roomName, "parkour");
-        
-        if (distance <= maxDistance || roomName.includes("parkour")) {
+        if (isParkour) {
             numRooms++; // Increment the room counter
             
             const modeMapping = {
@@ -162,7 +167,6 @@ const printBonkPkrRooms = (roomsJSON) => {
             };
             
             let mode = modeMapping[room.mode_mo] || "Classic";
-            
             let password = room.password === 1 ? "Yes" : "No";
 
             roomsEmbed.addFields({
