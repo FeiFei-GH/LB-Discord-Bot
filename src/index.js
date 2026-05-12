@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import csv from "csv-parser";
 import { Client, IntentsBitField, EmbedBuilder } from "discord.js";
+import { Readable } from "stream";
 
 dotenv.config();
 
@@ -18,6 +19,80 @@ const client = new Client({
 let bonkLoginToken = ""; // Maybe Encapsulate this in a class later
 
 // !My functions
+
+// Fetches, cleans, and updates the local mapList.csv safely
+const updateMapListCSV = async () => {
+    try {
+        console.log("Fetching latest map list from Google Sheets...");
+        const SHEET_ID = "1ZhAL5toX6rZbxtfTcUbZusWmqD0yL1uMqxH8RXpl5IE";
+        const GID = "1636874047";
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const csvText = await response.text();
+
+        // Safety Check 1: Ensure the fetched text is actually our CSV and not an error page
+        if (!csvText.includes("Map Name") || !csvText.includes("Mapmaker Name")) {
+            throw new Error("Fetched data does not contain expected headers. Aborting update.");
+        }
+
+        const results = [];
+        const headersToKeep = [
+            "Map Name", "Mapmaker Name", "Mode", "Bonk Version",
+            "Team/Solo Map", "Moving/Stationary", "Proof of concept map?", "Tags"
+        ];
+
+        // NEW: Wrap the stream in a Promise so JavaScript actually waits for it to finish!
+        await new Promise((resolve, reject) => {
+            Readable.from(csvText)
+                .pipe(csv())
+                .on("data", (data) => {
+                    const row = {};
+                    for (const header of headersToKeep) {
+                        row[header] = data[header] !== undefined ? data[header] : "";
+                    }
+                    results.push(row);
+                })
+                .on("end", () => {
+                    // Safety Check 2: Don't overwrite if we somehow got zero valid rows
+                    if (results.length === 0) {
+                        console.error("Parsed CSV resulted in 0 rows. Aborting.");
+                        resolve(); // Resolve anyway so the bot doesn't freeze
+                        return;
+                    }
+
+                    // Reconstruct the CSV format exactly
+                    let newCsvContent = headersToKeep.join(",") + "\n";
+                    results.forEach((row) => {
+                        const rowValues = headersToKeep.map((header) => {
+                            let val = row[header] || "";
+                            // If data contains commas or quotes (like Tags), wrap it in quotes
+                            if (val.includes(",") || val.includes('"')) {
+                                val = `"${val.replace(/"/g, '""')}"`;
+                            }
+                            return val;
+                        });
+                        newCsvContent += rowValues.join(",") + "\n";
+                    });
+
+                    // Write the safe data to the file
+                    fs.writeFileSync("src/mapList.csv", newCsvContent.trim(), "utf8");
+                    console.log(`Successfully updated src/mapList.csv with ${results.length} maps!`);
+                    resolve(); // Tell the Promise we are officially done
+                })
+                .on("error", (err) => {
+                    reject(err); // Catch any stream errors
+                });
+        });
+
+    } catch (error) {
+        console.error("Error updating map list:", error.message);
+        console.log("Fallback: Continuing to use the existing mapList.csv");
+    }
+};
+
 // Retrieves Room Data
 const bonkGetRoomsJSON = async () => {
     try {
@@ -277,8 +352,14 @@ const getRandomMap = async (authorName, mode, bonkVersion, tags) => {
 }
 
 // !Discord Bot Functions
-client.on("ready", (c) => {
+client.on("ready", async (c) => {
     console.log(`${c.user.username} is online.`);
+
+    // 1. Run the update immediately when the bot boots
+    await updateMapListCSV();
+
+    // 2. Schedule the update to run every 24 hours
+    setInterval(updateMapListCSV, 24 * 60 * 60 * 1000);
 
     sendBonkInfo();
 });
